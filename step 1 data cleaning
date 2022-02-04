@@ -1,0 +1,292 @@
+#### Step 1 ####
+import pandas as pd
+import numpy as np
+import warnings
+import time
+
+overall_start = time.time()
+
+## initialise timing
+steps = ['1.0   - Initialise import settings', 
+         '1.1   - First row check', 
+         '1.2   - Set row limit', 
+         '1.3   - Concat Chunks (1 file)',
+         '1.4   - Remove []',
+         '1.5   - Export',
+         '1.1-5 - 1 file time (total)',
+         'Overall']
+
+times = {step:[] for step in steps}
+
+
+
+#### Step 1: import, remove space before inf, NA rows, ] in last column, [ in nAcid column, ####
+#### add header descriptors to each file, export as temp file                               ####
+
+#### 1.0   - Initialise import settings ####
+start_time = time.time() # opt
+
+
+#path = 'D:/completed_code/'
+
+## names of files to filter:
+   
+files = ['book_dataset_0',
+         'book_dataset_1',
+         'book_dataset_2',
+         'book_dataset_3',
+         'book_dataset_4',
+         'book_dataset_5',
+         'book_dataset_6',
+         'book_dataset_7',
+         'book_dataset_8',
+         'book_dataset_9',
+         'book_dataset_10',
+         'book_dataset_11',
+         'book_dataset_12',
+         'book_dataset_13',
+         'book_dataset_14',
+         'book_dataset_15',
+         'book_dataset_16',
+         'book_dataset_17',
+         'book_dataset_18',
+         'book_dataset_19',
+         'book_dataset_20',
+         'book_dataset_21',
+         'book_dataset_22',
+         'book_dataset_23',
+         'book_dataset_24',
+         'book_dataset_25',
+         'book_dataset_26',
+         'book_dataset_27']
+# files = ['book_dataset_0']
+# files = ['book_test_14']
+# files = ['book_dataset_0_modifiedsubset_7']
+
+'''
+## remove .csv first when using google drive path, also uncomment google drive path - tfiles to get filename from path
+files = ['/content/drive/MyDrive/completed sets/book_dataset_17',
+         '/content/drive/MyDrive/completed sets/book_dataset_18',
+         '/content/drive/MyDrive/completed sets/book_dataset_19',
+         '/content/drive/MyDrive/completed sets/book_dataset_27']
+files = files[2:]
+'''
+
+#full_filename = [path + x for x in files]
+
+## names of 'cleaner' version of files - (NA rows, [ ] removed): temp_filename
+tfiles = ['temp_' + fname for fname in files]
+
+'''
+## google drive path - tfiles
+def find_name(paths):
+    return [path[path.find('book'):] for path in paths]
+tfiles = ['temp_'+ file for file in find_name(files)]
+'''
+
+first_file_w_descriptor = 'book_dataset_0'
+
+# to check if all the number of columns are the same
+ncol_check = []
+times['1.0   - Initialise import settings'].append(time.time() - start_time)
+
+
+
+
+
+for count, file in enumerate(files):
+    file_time = time.time() # opt
+    
+    
+    #full_filename = path + file
+    
+    
+    #### 1.1   - First row check ####
+    start_time = time.time() # opt
+    
+    # checking whether first row is descriptor
+    first_row = pd.read_csv('{}.csv'.format(file), nrows = 0, header = 0)
+    
+    try:
+        float(first_row.columns[3])
+        print('Not first file, using descriptors from {} as header'.format(first_file_w_descriptor))
+        header = pd.read_csv('{}.csv'.format(first_file_w_descriptor), nrows = 0, header = 0)
+        descriptors = header.columns
+        skiprow = None
+
+    except ValueError:
+        print ("This is the first file/a file with header descriptors")
+        descriptors = first_row.columns
+        # skip first row (header) later since already imported headers
+        skiprow = 1
+    times['1.1   - First row check'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### 1.2   - Chunk ####
+    start_time = time.time() # opt    
+    
+    # number of rows to read at once
+    rchunk_s = 100
+    # setting row limit (nrows) prevents pandas to read the empty rows (after data) (happens to book-dataset1, doens't happen to book_dataset_0)
+    row_lim = pd.read_csv('{}.csv'.format(file), usecols = [0], names = descriptors, skiprows = skiprow).dropna().shape[0]
+    # recognising " 'NA'" as NaN
+    navalues = "'NA'"
+    times['1.2   - Set row limit'].append(time.time() - start_time)
+
+    
+    # read a file in row chunks
+    chunks = pd.read_csv('{}.csv'.format(file), names = descriptors, skiprows = skiprow, chunksize = rchunk_s, nrows = row_lim, na_values = navalues, skipinitialspace = True)
+    
+    # Iteratively appending rows to a DataFrame can be more computationally intensive than a single concatenate.
+    # A better solution is to append those rows to a list 
+    # and then concatenate the list with the original DataFrame all at once.
+    #    https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.append.html
+    
+  
+   
+    
+    #### 1.3   - Concat Chunks (1 file) ####
+    start_time = time.time() # opt
+    
+    # removing NA rows upon import, concat all row chunks (of a single file)
+    df  = pd.concat(chunks).dropna()
+    
+    
+    
+      
+    #remove duplicates
+    # dropping ALL duplicte values
+    if df.duplicated(subset=['smiles']).any():
+        df.drop_duplicates(subset =['smiles'],inplace = True)
+        print('duplicates removed')
+    else:
+        print('no duplicates')
+        
+    
+    
+    print('Read {} rows in {}'.format(row_lim, file))
+    print('NA rows removed')
+    
+    print('{} rows left'.format(df.shape[0]))
+    
+    times['1.3   - Concat Chunks (1 file)'].append(time.time() - start_time)
+    
+    # store number of columns of file to be checked later
+    ncol_check.append(df.shape[1])
+    
+    
+    
+    
+    
+    #### 1.4   - Remove [] ####
+    start_time = time.time() # opt
+    
+    # removing ] in last column
+    if 'PubchemFP880' in df.columns:
+        if type(df['PubchemFP880'].iloc[-1]) == str and "]" in df['PubchemFP880'].iloc[-1]:
+            df['PubchemFP880'] = pd.to_numeric(df['PubchemFP880'].astype(str).str.rstrip(']'))
+            print('] removed in last column')
+        else:
+            print('] not present in last column')
+    else:
+        print('PubchemFP880 not among columns')
+
+    # removing [ in nAcid column
+    if 'nAcid' in df.columns:
+        if type(df['nAcid'].iloc[3]) == str and "[" in df['nAcid'].iloc[0]:
+            df['nAcid'] = pd.to_numeric(df['nAcid'].str.lstrip('['))
+            print('[ removed in nAcid')
+        else:
+            print('[ not present in nAcid')
+    else:
+        print('nAcid not among columns')
+    times['1.4   - Remove []'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### 1.5   - Export ####
+    start_time = time.time() # opt
+    
+    df.to_csv('{}.csv'.format(tfiles[count]), index=False)
+    print('File exported as {}.csv'.format(tfiles[count]))
+    print()
+    times['1.5   - Export'].append(time.time() - start_time)
+    
+    times['1.1-5 - 1 file time (total)'].append(time.time() - file_time)
+    
+    # clear variable to reduce RAM usage
+    chunks = None
+    df     = None
+    
+    
+    
+    
+    
+# make sure that all files have same number of cols
+if ncol_check.count(ncol_check[0]) == len(ncol_check):
+    print('All files have same number ({}) of columns'.format(ncol_check[0]))
+else:
+    print('****Warning: files have different numbers of columns****')
+    for tfile, ncol in zip(tfiles, ncol_check):
+        print ('{}: {} columns'.format(tfile, ncol))
+
+
+        
+        
+## file naming
+# take numbers only from each file
+nums = []
+for tfile in tfiles:
+    fnums = [char for char in tfile if char.isdigit()]
+    nums.append(''.join(fnums))
+
+if len(nums) < 5:
+    nums_ = '_'.join(nums)
+else: # 5 files or above
+    nums_ = '_'.join(nums[:2] +['...'] + nums[-2:])
+    
+print(tfiles)
+times['Overall'].append(time.time() - overall_start)
+print("--- {:.4f} seconds ---(overall)".format(time.time() - overall_start))  #opt
+
+
+
+
+
+## timing
+d = list(  zip( times.keys(), [np.mean(np.array(times[key])) for key in times], times.values() )  )
+time_df, time_fname = pd.DataFrame(data=d, columns = ['Step', 'Avg Time', 'Times']), 'Step 1 Times {}'.format(nums_)
+time_df.to_csv('{}.csv'.format(time_fname))
+print('--- Times exported as {} ---'.format(time_fname)) # opt
+
+
+
+'''
+
+Not first file, using descriptors from book_dataset_0 as header
+Read 149841 rows in /content/drive/MyDrive/completed sets/book_dataset_18
+NA rows removed
+131520 rows left
+] not present in last column
+[ removed in nAcid
+File exported as temp_book_dataset_18.csv
+
+Not first file, using descriptors from book_dataset_0 as header
+Read 149862 rows in /content/drive/MyDrive/completed sets/book_dataset_19
+NA rows removed
+125649 rows left
+] not present in last column
+[ removed in nAcid
+File exported as temp_book_dataset_19.csv
+
+All files have same number (2958) of columns
+['temp_book_dataset_18', 'temp_book_dataset_19']
+--- 1568.3261 seconds ---(overall)
+--- Times exported as Step 1 Times 18_19 ---
+
+'''
