@@ -1,0 +1,170 @@
+# https://stackoverflow.com/questions/2018512/reading-tar-file-contents-without-untarring-it-in-python-script
+# solve value length error # https://stackoverflow.com/questions/2018512/reading-tar-file-contents-without-untarring-it-in-python-script
+
+import os
+import tarfile
+import lzma
+import cclib
+import pandas as pd
+import time
+
+start_time = time.time()
+
+file_num = 1
+
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/complete_tar/b3lyp_2017'
+#directory1 = 'D:/completed_code'
+
+os.chdir('{}/{}'.format(directory1, file_num))
+print(os.getcwd())
+
+# before extract, create dataframe
+id_name = []
+HOMO = []
+LUMO = []
+first_excited_state = []
+osci_strength = []
+        
+id_removed = []
+
+for filename in os.listdir():
+    print('Current compound:',filename)
+    print("----------------------")
+    
+    try:
+        tar_1 = tarfile.open(filename)
+        tar_1.extractall()
+    
+        tar_1.close()
+    
+        os.remove(filename) # remove the extracted file
+        
+        os.chdir('{}/{}/{}'.format(directory1, file_num, filename.replace('.tar.gz','')))
+        print("Going into ", os.getcwd())
+    
+    except:
+        os.chdir('{}/{}/{}'.format(directory1, file_num, filename.replace('.tar.gz','')))
+        print("Going into ", os.getcwd())
+    
+    # In the compound file
+    
+    for files in os.listdir():
+        
+        directory = '{}/{}/{}/{}'.format(directory1, file_num, filename.replace('.tar.gz',''), files)
+        if os.path.isdir(directory):
+            os.chdir(directory)
+        else:
+            os.remove(directory)
+            
+        print('Current number: ', files)
+        #id.append(files)
+        print("Current file: \n",os.getcwd())
+        
+        print('Number of files: ',len(os.listdir()))
+        print("The files inside: \n",os.listdir())
+        print("\n")
+        
+        
+        if len(os.listdir()) < 5:
+            id_removed.append(files)
+        
+        # find and untar +d log xz
+        for logfile in os.listdir():
+            if logfile.endswith('.td-b3lyp_6-31g+(d).log.xz'):
+                print('Found: ',logfile)
+                
+                try:
+                    with lzma.open(logfile) as f, open('{}'.format(logfile.replace('.xz','')), 'wb') as fout:
+                        file_content = f.read()
+                        fout.write(file_content)
+                    print("logfile extracted")
+                except:
+                    print('logfile NA')
+        
+        
+        # extract homo lumo
+        
+        
+        
+        for extracted_log in os.listdir():
+            if extracted_log.endswith('.log'):
+                try:
+                    print("Extracting, found log: ", extracted_log)
+                    id_name.append("{}".format(extracted_log.replace('.td-b3lyp_6-31g+(d).log','')))
+                    
+                    try:
+                        data = cclib.io.ccread(extracted_log)
+                        
+                        try:
+                            homo=data.moenergies[0][int(data.homos)]
+                            print("HOMO: ",homo)
+                            HOMO.append(homo)
+                        except:
+                            print("Error getting HOMO")
+                            HOMO.append('NA')
+                            
+                            
+                        try:
+                            lumo=data.moenergies[0][int(data.homos)+1]
+                            print("LUMO: ",lumo)
+                            LUMO.append(lumo)
+                        except:
+                            print("Error getting LUMO")
+                            LUMO.append('NA')
+                            
+                        try:
+                            first_excitedstate=0.000123981*data.etenergies[0]
+                            print("First_exc: ",first_excitedstate)
+                            first_excited_state.append(first_excitedstate)
+                        except:
+                            print("Error getting first excited state")
+                            first_excited_state.append('NA')
+                            
+                        try:
+                            oscillator_strength=data.etoscs[0]
+                            print("Osi_st: ",oscillator_strength)
+                            osci_strength.append(oscillator_strength)
+                        except:
+                            print("Error getting oscillator strength")
+                            osci_strength.append('NA')
+                    
+                    
+                    except:
+                        print("Error cclib extract file")
+                        id_name.remove("{}".format(extracted_log.replace('.td-b3lyp_6-31g+(d).log','')))
+                    
+                except:
+                    print('log not found')
+              
+      
+                
+        print("\n")
+        
+        
+    print("###########################")
+    # Back to main file
+    os.chdir('{}/{}/'.format(directory1, file_num))
+    print("Back to ",os.getcwd()) 
+    print()
+    
+data = pd.DataFrame(
+    {
+        'id':id_name,
+        'HOMO':HOMO,
+        'LUMO':LUMO,
+        'first_excited_state': first_excited_state,
+        'oscillator_strength': osci_strength
+    }
+)
+    
+        
+print(data)
+print('id_removed: ',id_removed)
+
+data.to_csv('{}/extracted_data_{}.csv'.format(directory1, file_num),index=False)
+
+
+end_time = time.time()
+hours, rem = divmod(end_time - start_time, 3600)
+minutes, seconds = divmod(rem, 60)
+print("Time elapsed: {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
