@@ -1,0 +1,573 @@
+# final final
+
+# (put in HPC)  corr + bpruta+ randomserchcv success  retry + output buffer + optimize boruta
+
+# https://blog.exploratory.io/finding-variable-importance-with-random-forest-boruta-28badd116197
+# https://towardsdatascience.com/simple-example-using-boruta-feature-selection-in-python-8b96925d5d7a
+
+# log_osci
+
+import pandas as pd
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error #https://youtu.be/L5sxEr77Yvo?t=252
+from matplotlib.pyplot import figure
+
+import matplotlib.pyplot as plt
+#from itertools import product
+
+import time
+
+from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import RFECV
+
+from boruta import BorutaPy
+from pprint import pprint
+from sklearn.model_selection import RandomizedSearchCV
+
+from sklearn.metrics import r2_score
+
+# import pydot
+# from sklearn.tree import export_graphviz
+
+import sys
+
+class Unbuffered(object):
+   def __init__(self, stream):
+       self.stream = stream
+   def write(self, data):
+       self.stream.write(data)
+       self.stream.flush()
+   def writelines(self, datas):
+       self.stream.writelines(datas)
+       self.stream.flush()
+   def __getattr__(self, attr):
+       return getattr(self.stream, attr)
+    
+    
+sys.stdout = Unbuffered(sys.stdout)
+
+start_time = time.time()
+
+# ----------------- load dataset ------------------
+
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/Finalist'
+# directory1 = 'D:/completed_code/randomf/combine all corr boruta test'
+
+# target = 'HOMO'  
+# target = 'LUMO'
+# target = 'first_excited_state'
+target = 'log_oscillator_strength'
+
+enter_threshold = 0.90 # !!!!!!!!!!!!!!!!!!!!!!!!!! 
+sample_frac = 0.005 # !!!!!!!!!!!!!!!!!!!!!!!!! 0.005 for dataset
+boruta_max_iter = 100 # !!!!!!!!!!!!!! 100 or 50
+
+
+print("Preparing Random forest for target {} ".format(target))
+# Load dataset
+# Final_combined_inner_rand2000_2_removedHOMOLUMOlog.csv
+df = pd.read_csv('{}/Final_combined_inner_removedHOMOLUMOlog.csv'.format(directory1))
+
+df.drop(['Unnamed: 0', 'smiles', 'HOMO','LUMO', 'first_excited_state','oscillator_strength' ],axis = 1, inplace = True) #!!!!!!!!!!!!!
+
+# here remove smiles and index first 
+print('dataframe shape: ', df.shape)
+X = df.drop(target, axis = 1)
+#print("X:\n",X) #left only fingerprint
+
+y = df['{}'.format(target)] #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#print("Y:\n", y)
+
+print("X shape: ",X.shape)
+print("Y shape: ",y.shape)
+
+# --------------------------- load dataset complete -------------------
+
+# ---------------------------------------correlation with target part-----------
+# https://datascience.stackexchange.com/questions/39137/how-can-i-check-the-correlation-between-features-and-target-variable
+
+correlation = df[df.columns[1:]].corr()['{}'.format(target)][:]
+
+
+correlation.to_csv('{}/correlation with target {}.csv'.format(directory1, target))
+
+print()
+print('Correlation with target saved to csv')
+print('Correlation of features (descriptors) with target {}'.format(target))
+print(correlation)
+
+# ------------end correlation with target part---------
+
+
+# ------------------------------drop correlaton -------------------------
+
+print()
+print('Preparing to drop correlated features(descriptors)')
+
+# https://towardsdatascience.com/how-to-use-pairwise-correlation-for-robust-feature-selection-20a60ef7d10
+
+
+def identify_correlated(df, threshold):
+    """
+    A function to identify highly correlated features.
+    """
+    # Compute correlation matrix with absolute values
+    matrix = df.corr().abs()
+    
+    # Create a boolean mask
+    mask = np.triu(np.ones_like(matrix, dtype=bool))
+    
+    # Subset the matrix
+    reduced_matrix = matrix.mask(mask)
+    
+    reduced_matrix.to_csv('{}/reduced_matrix_correlation {}.csv'.format(directory1, target))
+    print('Descriptor correlation saved to csv')
+    
+    # Find cols that meet the threshold
+    to_drop = [c for c in reduced_matrix.columns if \
+              any(reduced_matrix[c] > threshold)]
+    
+    return to_drop
+
+
+to_drop = identify_correlated(X, threshold = enter_threshold)
+
+
+print()
+print('{} features descriptors will be dropped:'.format(len(to_drop)))
+
+print(to_drop)
+
+X = X.drop(to_drop, axis = 1)
+
+print()
+print('X shape after correlation removed: ',X.shape)
+
+#--------------- drop correlation end-----------------------------
+
+
+##--------------------initialize Boruta-----------------
+
+# https://www.kaggle.com/rsmits/feature-selection-with-boruta
+
+print()
+print('Performing boruta:')
+
+print('Start sampling form the full dataset:')
+
+
+df = df.iloc[0:0]
+
+print('Concat X and y')
+df = pd.concat([X, y], axis = 1)
+
+print('Current df shape: ', df.shape)
+
+df_sample = df.sample(frac = sample_frac, random_state = 42)
+
+print()
+print('df_sample shape: ', df_sample.shape)
+
+# clear original df
+df = df.iloc[0:0]
+
+X_sample = df_sample.drop(target, axis = 1)
+#print("X:\n",X) #left only fingerprint
+
+y_sample = df_sample['{}'.format(target)]
+
+print()
+print('Iterating boruta:')
+
+model = RandomForestRegressor(n_estimators = 100, max_depth = 5,  random_state = 42, n_jobs = -1)  # set random_state
+
+# fit random forest model to the training data
+# model.fit(X, y)
+
+
+
+# define Boruta feature selection method
+feat_selector = BorutaPy(model, n_estimators='auto', verbose=2, random_state=42, max_iter = boruta_max_iter , perc = 90)
+
+
+
+# find all relevant features
+feat_selector.fit(np.array(X_sample), np.array(y_sample))
+
+# check selected features
+feat_selector.support_
+
+# check ranking of features
+feat_selector.ranking_
+
+feat_selector.n_features_ 
+
+print()
+print('Boruta model currently in use:')
+pprint(feat_selector.get_params())
+print()
+
+
+### print results
+green_area = X_sample.columns[feat_selector.support_].to_list()
+blue_area = X_sample.columns[feat_selector.support_weak_].to_list()
+
+print('features in the green area:', green_area)
+print('features in the blue area:', blue_area)
+
+# zip column names, ranks, and decisions in a single iterable
+feature_ranks = list(zip(X_sample.columns, 
+                         feat_selector.ranking_, 
+                         feat_selector.support_))
+
+# iterate through and print out the results
+for feat in feature_ranks:
+    print('Feature: {:<25} Rank: {},  Keep: {}'.format(feat[0], feat[1], feat[2]))
+
+# call transform() on X to filter it down to selected features
+# X = feat_selector.transform(np.array(X))    
+
+selected_features = []
+selected_features.extend(green_area)
+selected_features.extend(blue_area)
+selected_features.append('{}'.format(target))
+print('selected_features:',selected_features)
+
+print()
+print('Number of selected features:',len(selected_features))
+print()
+
+# ---------------------------------boruta end ------------------
+
+
+# --------------------------- reload new dataframe--------------
+
+df = pd.read_csv('{}/Final_combined_inner_removedHOMOLUMOlog.csv'.format(directory1), usecols= selected_features)
+
+print('df shape after boruta',df.shape)
+
+X = df.drop(target, axis = 1)
+#print("X:\n",X) #left only fingerprint
+
+y = df['{}'.format(target)]
+#print("Y:\n", y)
+
+print("X shape: ",X.shape)
+print("Y shape: ",y.shape)
+
+# --------------------reload new dataframe end---------------
+
+
+# -------------- finding best parameters --------------
+
+# print('Finding best parameters: ')
+
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
+# print("X_train shape: ",X_train.shape)
+# print("y_train shape: ",y_train.shape)
+
+# print("X_test shape: ",X_test.shape)
+# print("y_test shape: ",y_test.shape)
+
+
+#  -------
+
+# # Number of trees in random forest
+# n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
+
+# # Number of features to consider at every split
+# max_features = ['auto', 'sqrt', 'log2']
+
+# criterion = ['squared_error','absolute_error','poisson' ]
+
+# # Maximum number of levels in tree
+# max_depth = [int(x) for x in np.linspace(10, 110, num = 11)]
+# max_depth.append(None)
+
+# # Minimum number of samples required to split a node
+# min_samples_split = [2, 5, 10]
+
+# # Minimum number of samples required at each leaf node
+# min_samples_leaf = [1, 2, 4]
+
+# # Method of selecting samples for training each tree
+# # bootstrap = [True, False]
+
+
+# # Create the random grid
+# random_grid = {'n_estimators': n_estimators,
+#                'max_features': max_features,
+#                'max_depth': max_depth,
+#                'min_samples_split': min_samples_split,
+#                'min_samples_leaf': min_samples_leaf,
+# #                'criterion':criterion,
+#                # 'bootstrap': bootstrap
+#               }
+# pprint(random_grid)
+
+
+# # Use the random grid to search for best hyperparameters
+# # First create the base model to tune
+# rf = RandomForestRegressor(random_state = 42)
+
+# # Random search of parameters, using 5 fold cross validation, 
+# # search across 50 different combinations, and use all available cores
+# search = RandomizedSearchCV(estimator = rf, 
+#                                param_distributions = random_grid, 
+#                                n_iter = 50, 
+#                                cv = 5, 
+#                                verbose=1, 
+#                                random_state = 42, 
+#                                n_jobs = -1)
+
+
+
+
+# # -----------------------
+# # Fit the random search model
+# search_model = search.fit(X_train, y_train)
+
+# dict = search_model.best_params_
+    
+# best_n_estimators = dict.get('n_estimators')
+# best_max_depth = dict.get('max_depth')
+# best_max_features = dict.get('max_features')
+# best_min_samples_split = dict.get('min_samples_split')
+# best_min_samples_leaf = dict.get('min_samples_leaf') 
+# best_criterion = dict.get('criterion')
+    
+# print('\nAfter performing randomized search cv: ')
+# print('The best n_estimators:', best_n_estimators)
+# print('The best max_depth:', best_max_depth)
+# print('The best max features:', best_max_features)
+# print('The best min_samples_split:',best_min_samples_split)
+# print('The best min_samples_leaf:', best_min_samples_leaf)
+# print('The best criterion:', best_criterion)
+
+    
+# print('Best estimator: ', search_model.best_estimator_)
+# print('best parameter: ', dict)
+# print('accuracy score: ', search_model.best_score_)
+# print('model results: ', search_model.cv_results_)
+
+
+# -------------------------- find best parameter end ---------------
+
+# ------------- start split and random forest -----------------
+
+
+print()
+print('Start split and perform random forest:')
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
+print("X_train shape: ",X_train.shape)
+print("Y_train shape: ",y_train.shape)
+
+print("X_test shape: ",X_test.shape)
+print("Y_test shape: ",y_test.shape)
+
+# https://youtu.be/aXw12xFVxwg?t=283
+
+
+# model = RandomForestRegressor(n_estimators = best_n_estimators, 
+#                               max_depth = best_max_depth,
+#                               max_features = best_max_features, 
+#                               min_samples_split = best_min_samples_split,
+#                               min_samples_leaf = best_min_samples_leaf,
+#                               random_state = 42, 
+#                               oob_score = True,
+#                               #criterion = best_criterion,
+#                               n_jobs = -1)  # set random_state
+
+# ------------- start split and random forest -----------------
+
+
+
+
+model = RandomForestRegressor(n_estimators = 1100, 
+                              random_state = 42, 
+                              oob_score = True,
+                              verbose = 2,
+                              n_jobs = -1)  # set random_state
+
+
+print()
+# Look at parameters used by our current forest
+print('RFR Parameters currently in use:\n')
+pprint(model.get_params())
+print()
+
+# fit random forest model to the training data
+model.fit(X_train, y_train)
+
+r1 = model.score(X_train, y_train)
+print("The training accuracy is: ",r1)
+
+r2 = model.score(X_test, y_test)
+print("The testing accuracy is: ",r2)
+
+# do prediction using test data
+y_pred = model.predict(X_test)
+
+# calculating performance
+print('oob score:', model.oob_score_)
+
+m_abs_err = mean_absolute_error(y_test, y_pred)
+m_sqr_err = mean_squared_error(y_test, y_pred)
+
+print("Mean absolute error of test model: ", m_abs_err)
+print("Mean squared error of test model: ", m_sqr_err)
+
+
+# https://scikit-learn.org/stable/modules/generated/sklearn.metrics.r2_score.html
+r3 = r2_score(y_test, y_pred)
+print('The y_test y_pred r2 score is :', r3) 
+
+print()
+y_train_pred = model.predict(X_train)
+
+
+m_abs_err2 = mean_absolute_error(y_train, y_train_pred)
+m_sqr_err2 = mean_squared_error(y_train, y_train_pred)
+
+print("Mean absolute error of train model: ", m_abs_err2)
+print("Mean squared error of train model: ", m_sqr_err2)
+
+# ------------------------ inspect the predicted value -----------------
+print()
+print('Inspecting predicted value:')
+df_inspect = pd.DataFrame({'Real values y_test':y_test, 'Predicted values y_pred':y_pred})
+print(df_inspect)
+
+df_inspect.to_csv('{}/real values and predicted value {}.csv'.format(directory1, target))
+
+
+
+# -------------------------inspect predicted value end--------------------
+
+# make scatter plot of experimental vs predicted target values
+sns.set(color_codes = True)
+sns.set_style("white")
+
+
+# oob error: not suitable for large dataset
+
+ax = sns.regplot(x = y_test, y = y_pred, scatter_kws = {'alpha': 0.8, 's' : 1, "color": "blue"}, line_kws={"color": "red", 'linewidth':0.5})
+ax.set_xlabel('DFT calculated oscillator strength (log10)', fontsize = 'large', fontweight = 'bold')
+ax.set_ylabel('ML predicted oscillator strength (log10)', fontsize = 'large', fontweight = 'bold')
+plt.xticks(fontsize=20)
+plt.yticks(fontsize=20)
+# ax.set_xlim(0, 12)
+# ax.set_ylim(0, 12)
+ax.figure.set_size_inches(22, 20)
+#plt.show()
+plt.savefig('{}/{}/Scatter_Plot_Exp_Vs_target_{}.png'.format(directory1,target, target))
+
+
+# --------------end split train rf -------------------------
+
+# --------------full importance-------------------
+
+# https://youtu.be/ChWPa8kzE74?list=PLpoCVQU4m6j-BRSdhXHKOwht7yTPqKUD7&t=186
+importance = model.feature_importances_
+columns = X_train.columns
+
+Graph = pd.Series(importance, columns)
+
+Graph.sort_values(ascending=False, inplace = True)
+Graph.to_csv('{}/full_importance for target {}.csv'.format(directory1, target))
+
+print("\n")
+print("Descriptor importance in target {}:".format(target))
+print(Graph.head(20))
+print('\n')
+print(Graph.tail(20))
+
+figure(figsize = (150, 100))
+Graph.sort_values().plot.barh(color = "red")
+
+plt.title("Random forest regressor model importance visualization for target {}".format(target), fontsize = 80)
+plt.xticks(fontsize=20)
+plt.yticks(fontsize=20)
+plt.xlabel('Descriptors Importance Score', fontsize=80)
+plt.ylabel('Descriptors', fontsize=80)
+plt.grid(True)
+plt.savefig('{}/{}/descriptor importance {}.png'.format(directory1, target, target))
+
+
+#-----------------------------------importance part -----------------
+
+# https://chrisalbon.com/code/machine_learning/trees_and_forests/feature_selection_using_random_forest/
+print()
+
+
+# for feature in zip(X, model.feature_importances_):
+#     print(feature)
+
+# Create a selector object that will use the random forest classifier to identify
+# features that have an importance of more than threshold
+
+# sfm = SelectFromModel(model, threshold = 0.01)
+
+
+# # Train the selector
+# sfm.fit(X_train, y_train)
+
+# # Print the names of the most important features
+print()
+print('-------------------most important features--------------------------')
+print()
+
+# length = 0
+
+# for feature_list_index in sfm.get_support(indices = True):
+#     print(X.columns[feature_list_index])
+#     length += 1
+
+# print('Number of important features greater than threshold: ', length)
+
+figure(figsize = (30, 20))
+Graph2  = Graph.sort_values(ascending=False).head(20)
+Graph2.sort_values().plot.barh(color = 'red')
+plt.title("Random forest regressor model top 20 important descriptors for target {}".format(target), fontsize = 25)
+plt.xticks(fontsize=20)
+plt.yticks(fontsize=20)
+plt.xlabel('Descriptors Importance Score', fontsize=20)
+plt.ylabel('Descriptors', fontsize=20)
+plt.grid(True)
+plt.savefig('{}/{}/top 20 important descriptors {}.png'.format(directory1, target, target))
+
+#--------------------------------------------------
+
+# --------------- graphviz ---------------
+
+# Use sklearn to export the tree 
+
+
+# Write the decision tree as a dot file (success, but too large)
+# visual_tree = model.estimators_[12]
+# export_graphviz(visual_tree, out_file = '{}/best_tree.dot'.format(directory1), feature_names = X.columns, 
+#                 precision = 2, filled = True, rounded = True, max_depth = None)
+
+# # Use pydot for converting to an image file
+
+
+# # Import the dot file to a graph and then convert to a png
+# (graph, ) = pydot.graph_from_dot_file('{}/best_tree.dot'.format(directory1))
+# graph.write_png('{}/best_tree.png'.format(directory1))
+
+# --------------graphviz end ----------------------
+
+end_time = time.time()
+hours, rem = divmod(end_time - start_time, 3600)
+minutes, seconds = divmod(rem, 60)
+print("Time elapsed: {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+
+
+
+
+
