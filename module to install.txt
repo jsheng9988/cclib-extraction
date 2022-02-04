@@ -1,0 +1,9 @@
+rdkit
+padelpy
+scikit-learn
+pandas
+numpy
+math
+matplotlib
+tensorflow
+keras
