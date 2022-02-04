@@ -1,0 +1,11 @@
+import pandas as pd
+
+import numpy as np
+
+
+# df = pd.read_csv('{}/Final_combined_inner.csv'.format(directory1), usecols = ['HOMO', 'LUMO','first_excited_state', 'log_oscillator strength'])
+
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/Finalist'
+df = pd.read_csv('{}/Final_combined_inner_removedHOMOLUMOlog.csv'.format(directory1), usecols = ['HOMO', 'LUMO','first_excited_state', 'oscillator_strength','log_oscillator_strength'])
+
+print(df.describe())
