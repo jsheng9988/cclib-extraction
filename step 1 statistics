@@ -1,0 +1,57 @@
+# combine together
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+sns.set(rc={'figure.figsize':(20, 20)})
+
+
+sns.set(style = 'darkgrid')
+
+# directory1 = 'D:/completed_code/randomf/trial'
+# directory2 = 'D:/completed_code/randomf/trial'
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/Finalist'
+directory2 = '/lustre/project/materialdesign/b3lyp_2017/Finalist/stats'
+# Final_combined_inner.csv
+df = pd.read_csv('{}/Final_combined_inner.csv'.format(directory1))
+
+
+
+print('The statistics of the distribution before:\n')
+print('HOMO\n',df['HOMO'].describe(),'\n')
+print('LUMO\n',df['LUMO'].describe(),'\n')
+print('first_excited_state\n',df['first_excited_state'].describe(),'\n')
+print('oscillator_strength\n',df['oscillator_strength'].describe(),'\n')
+
+ax1 = sns.displot(df, x = 'HOMO', kind  = 'hist', aspect = 1.2 )
+plt.xlabel('DFT calculated HOMO (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+
+
+plt.savefig('{}/HOMO_dist.png'.format(directory2))
+
+
+ax2 = sns.displot(df, x = 'LUMO', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated LUMO (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+
+plt.savefig('{}/LUMO_dist.png'.format(directory2))
+
+ax3 = sns.displot(df, x = 'oscillator_strength', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated oscillator strength', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+
+plt.savefig('{}/osci_dist.png'.format(directory2))
+
+
+ax4 = sns.displot(df, x = 'first_excited_state', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated first excited state (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+
+plt.savefig('{}/firstex_dist.png'.format(directory2))
+
+print('shape before:\n', df.shape)
+
+
