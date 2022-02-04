@@ -1,0 +1,23 @@
+import pandas as pd
+
+# files = ['D:/completed_code/smiles/Filtered 0-1 (first).csv',
+#         'D:/completed_code/smiles/Filtered 0-2.csv',
+#         'D:/completed_code/smiles/Filtered 0-3.csv']
+
+
+df1= pd.read_csv('Filtered 0_1_..._26_27-1 (first).csv')
+df2= pd.read_csv('Filtered 0_1_..._26_27-2.csv')
+df3= pd.read_csv('Filtered 0_1_..._26_27-3.csv')
+df4= pd.read_csv('Filtered 0_1_..._26_27-4.csv')
+df5= pd.read_csv('Filtered 0_1_..._26_27-5.csv')
+df6= pd.read_csv('Filtered 0_1_..._26_27-6.csv')
+df7= pd.read_csv('Filtered 0_1_..._26_27-7.csv')
+
+
+df_final = pd.concat([df1,df2,df3,df4,df5,df6,df7], axis = 1)
+
+#dat1 = pd.concat([dat1, dat2], axis=1)
+
+df_final.to_csv('Final_compiled_dataset.csv')
+
+print(df_final.shape)
