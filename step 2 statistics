@@ -1,0 +1,75 @@
+# combine together
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+sns.set(rc={'figure.figsize':(20, 20)})
+
+
+sns.set(style = 'darkgrid')
+
+# directory1 = 'D:/completed_code/randomf/trial'
+# directory2 = 'D:/completed_code/randomf/trial'
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/Finalist'
+directory2 = '/lustre/project/materialdesign/b3lyp_2017/Finalist/stats'
+# Final_combined_inner.csv
+df = pd.read_csv('{}/Final_combined_inner.csv'.format(directory1))
+
+
+# step 2
+
+range_HOMO1 = df[(df['HOMO'] < -8 )].index
+range_HOMO2 = df[(df['HOMO'] > -3)].index
+df.drop(range_HOMO1, inplace = True )
+df.drop(range_HOMO2, inplace = True)
+
+range_LUMO1 = df[(df['LUMO'] < -4)].index
+range_LUMO2 = df[(df['LUMO'] >  0)].index
+df.drop(range_LUMO1, inplace = True)
+df.drop(range_LUMO2, inplace = True)
+
+
+value_osci_0 = df[(df['oscillator_strength'] == 0)].index
+df.drop(value_osci_0, inplace = True)
+df['log_oscillator_strength'] = np.log10(df['oscillator_strength'])
+
+print('-----------------------------------------')
+print('shape after:\n',df.shape)
+
+ax5 = sns.displot(df, x = 'HOMO', kind  = 'hist', aspect = 1.2, )
+plt.xlabel('DFT calculated HOMO (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+plt.savefig('{}/HOMO_dist_2.png'.format(directory2))
+
+
+ax6 = sns.displot(df, x = 'LUMO', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated LUMO (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+plt.savefig('{}/LUMO_dist_2.png'.format(directory2))
+
+
+ax7 = sns.displot(df, x = 'log_oscillator_strength', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated oscillator strength (log10)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+plt.savefig('{}/osci_dist_2.png'.format(directory2))
+
+
+ax8 = sns.displot(df, x = 'first_excited_state', kind  = 'hist', aspect = 1.2)
+plt.xlabel('DFT calculated first excited state (eV)', fontsize = 'large') 
+plt.ylabel('Frequency', fontsize = 'large')
+plt.savefig('{}/firstex_dist_2.png'.format(directory2))
+
+
+print('\nThe statistics of the distribution after:\n')
+print('HOMO\n',df['HOMO'].describe(),'\n')
+print('LUMO\n',df['LUMO'].describe(),'\n')
+print('first_excited_state\n',df['first_excited_state'].describe(),'\n')
+print('oscillator_strength\n',df['oscillator_strength'].describe(),'\n')
+print('log_oscillator_strength\n',df['log_oscillator_strength'].describe(),'\n')
+
+# step 3
+
+
+df.to_csv('{}/Final_combined_inner_removedHOMOLUMOlog.csv'.format(directory1), index = False)
