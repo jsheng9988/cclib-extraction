@@ -1,0 +1,15 @@
+import pandas as pd
+
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/complete_tar/b3lyp_2017'
+
+for i in range(21):
+    globals()[f"df{i}"] = pd.read_csv("{}/extracted_data_{}.csv".format(directory1, i))
+    globals()[f"df{i}"].dropna(how='any',inplace=True)
+
+
+df_combined = pd.concat([df0, df1, df2, df3, df4, df5, df6, df7, df8, df9, df10,
+                 df11, df12, df13, df14, df15, df16, df17, df18, df19, df20],axis = 0,  ignore_index=True)
+
+df_combined.sort_values(by=['id'],inplace=True)
+
+df_combined.to_csv("{}/extracted_data_combined.csv".format(directory1), index = False)
