@@ -1,0 +1,28 @@
+import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+
+x = 'oscillator_strength'
+y = 'RTpiPCTPC'
+
+directory1 = '/lustre/project/materialdesign/b3lyp_2017/Finalist'
+df = pd.read_csv('{}/Final_combined_inner_removedHOMOLUMOlog.csv'.format(directory1), usecols = [x, y])
+
+
+x_axis = df['{}'.format(x)]
+
+y_axis = df['{}'.format(y)]
+
+sns.set(color_codes = True)
+sns.set_style("white")
+
+ax = sns.regplot(x = x_axis, y = y_axis, scatter_kws = {'alpha': 0.5, 's' : 0.01, "color": "purple"}, line_kws={"color": "orange", 'linewidth':2})
+ax.set_xlabel('oscillator strength', fontsize = 30, fontweight = 'bold')
+ax.set_ylabel('{}'.format(y), fontsize = 30, fontweight = 'bold')
+plt.xticks(fontsize=30)
+plt.yticks(fontsize=30)
+# ax.set_xlim(0, 12)
+# ax.set_ylim(0, 12)
+ax.figure.set_size_inches(18, 18)
+
+plt.savefig('{}/{}/{} vs {}.png'.format(directory1,'plot corr' ,x,y))
