@@ -1,0 +1,476 @@
+#### Step 2 ####
+
+import pandas as pd
+import numpy as np
+import warnings
+import time
+
+overall_start = time.time()
+
+## initialise timing
+steps = ['2.0   - Initialise import settings', 
+         '2.1.1 - Read', 
+         '2.1.2 - Concat', 
+         '2.2   - Replace inf, uniq',
+         '2.3   - Mean',
+         '2.4   - Mean/median',
+         '2.5   - Std/mean',
+         '2.6   - Naming, exporting',
+         '2.1-6 - Colchunk time',
+         'Overall']
+times = {step:[] for step in steps}
+
+
+#### Step 2.0: initialise import settings ####
+start_time = time.time() # opt
+
+## names of files to filter:
+# files = ['D:/completed_code/book_dataset_0','D:/completed_code/book_test_14']
+files = ['book_dataset_0',
+         'book_dataset_1',
+         'book_dataset_2',
+         'book_dataset_3',
+         'book_dataset_4',
+         'book_dataset_5',
+         'book_dataset_6',
+         'book_dataset_7',
+         'book_dataset_8',
+         'book_dataset_9',
+         'book_dataset_10',
+         'book_dataset_11',
+         'book_dataset_12',
+         'book_dataset_13',
+         'book_dataset_14',
+         'book_dataset_15',
+         'book_dataset_16',
+         'book_dataset_17',
+         'book_dataset_18',
+         'book_dataset_19',
+         'book_dataset_20',
+         'book_dataset_21',
+         'book_dataset_22',
+         'book_dataset_23',
+         'book_dataset_24',
+         'book_dataset_25',
+         'book_dataset_26',
+         'book_dataset_27']
+# files = ['book_dataset_0']
+# files = ['book_test_14']
+# files = ['book_dataset_17']
+# files = ['book_dataset_0','book_test_14', 'book_dataset_0_modifiedsubset_7']
+# files = ['book_dataset_0_modifiedsubset_7']
+
+
+## names of 'cleaner' version of files - (NA rows, [ ] removed): temp_filename
+# set files to None as they should not be used here
+tfiles, files = ['temp_'+ fname for fname in files], None
+
+## google drive path (set files to None here)
+# tfiles, files = ['/content/drive/MyDrive/Research Internship/temp_book_dataset_17',
+#                  '/content/drive/MyDrive/Research Internship/temp_book_dataset_18',
+#                  '/content/drive/MyDrive/Research Internship/temp_book_dataset_19',
+#                  '/content/drive/MyDrive/Research Internship/temp_book_dataset_27'], None
+
+
+
+
+
+# read first 2 rows to obtain headers and total number of columns
+row1_2      = pd.read_csv('{}.csv'.format(tfiles[0]), nrows = 1, header = 0)
+descriptors = row1_2.columns
+
+# identify where the numeric columns starts (ignore indices & smiles now)
+start_numcol = 0
+for i in range(5):
+    if type(row1_2.iloc[0,i]) == str:
+        start_numcol = i+1
+        break
+
+# number of numeric columns
+n_numcol = len(descriptors) - start_numcol        
+
+# column chunk size to process
+cchunk_s = 300
+
+# number of column chunks (and hence files) that will be generated
+n_cchunk = len(descriptors)//cchunk_s + 1
+
+## col_ranges (to import certain column ranges of the files)
+
+# first col chunk without numcol - size: cchunk_s - start_numcol
+col_ranges = [range(start_numcol, cchunk_s)]
+
+# most col chunks - size: cchunk_s
+col_ranges.extend([range(start * cchunk_s, start * cchunk_s + cchunk_s) for start in range(1, n_numcol//cchunk_s)])
+
+# last col chunk - size: remainder of n_numcol/cchunk_s (< cchunk_s)
+# starts at
+start = (n_numcol//cchunk_s)*cchunk_s
+col_ranges.append(range(start, len(descriptors)))
+
+print('Number of numeric columns                         : {} columns'.format(n_numcol))
+print('Number of columns from all files processed at once: {} columns'.format(cchunk_s))
+print('Number of column chunks that can be generated     : {} chunks'.format(n_cchunk))
+
+if cchunk_s >= len(descriptors):
+    raise Exception('Column chunk size should be smaller than total number of columns ({})'.format(len(descriptors)))
+
+print('Initialisation complete\n')
+times['2.0   - Initialise import settings'].append(time.time() - start_time)
+
+
+
+
+
+
+## select only part of col_ranges
+# to select only one chunk, let part_start = n, part_end = n+1: e.g. 5th chunk: part_start = 4, part_start = 5
+# part_start = len(col_ranges)-1 # start at last chunk
+# part_start = len(col_ranges)-2 # start at 2nd last chunk
+part_start = 0
+#part_end   = 1
+part_end   = len(col_ranges) # end at last chunk
+
+print('Selected numeric column chunks to be processed    : numcol chunk {} to numcol chunk {} ({} out of {} numcol chunks)'.format(part_start+1, part_end, part_end-part_start, n_cchunk))
+print('Number of files that will be generated            : {} files'.format(part_end-part_start))
+
+
+
+
+
+for count, col_range in enumerate(col_ranges[part_start:part_end], start = part_start + 1):
+    chunk_start = time.time()
+    
+    # empty list to store each imported file
+    df_files = []
+    
+    
+    #### Step 2.1: import selected column range for all files ####
+    start_time = time.time() # opt
+    
+    for tfile in tfiles:
+        
+        # number of rows to read at once
+        rchunk_s = 100
+        # setting row limit (nrows) prevents pandas to read the empty rows (after data) (happens to book-dataset1, doens't happen to book_dataset_0)
+        row_lim = pd.read_csv('{}.csv'.format(tfile), usecols = [0]).dropna().shape[0]
+        
+        # read a file in row chunks (from and up to col_range)
+        chunks  = pd.read_csv('{}.csv'.format(tfile), usecols = col_range, skiprows = 1, chunksize = rchunk_s, nrows = row_lim,  names = descriptors[col_range[0]:col_range[-1]+1], keep_default_na = False)
+        
+        # add the file to df_files
+        df_files.append(pd.concat(chunks))
+    
+    print('read through all files\n')
+    times['2.1.1 - Read'].append(time.time() - start_time)
+
+    start_time = time.time() # opt
+
+    df_num = pd.concat(df_files)
+    # clear variables to reduce RAM usage
+    chunks   = None
+    df_files = None
+    print('numcol chunk {} created'.format(count))
+    print('{} rows'.format(df_num.shape[0]))
+    print('{} columns left\n'.format(df_num.shape[1]))   # is this left chunks??
+    times['2.1.2 - Concat'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### Step 2.2: replacing inf with column max value, remove columns with few unique values ####
+    start_time = time.time() # opt
+
+    df_num = df_num.apply(pd.to_numeric, errors = 'raise')
+    
+    # selcting only the columns that contain inf
+    # assuming that there are no NaN values right after importing (since all NaN rows are removed),
+    # so after replacing all infs with NaN, all NaNs are inf
+
+    # temporarily replaces infs with NaN
+    infsreplaced = df_num.mask(df_num == np.inf)
+    # columns without inf
+    noinf = infsreplaced.dropna(axis = 1)
+    # columns with inf
+    infs = df_num.drop(noinf.columns, axis = 1)
+
+    cols = infs.columns
+    ## replacing infs with col max value (by first excluding inf)
+    for col in cols:
+        # create a boolean Series (the mask) that has all inf as False
+        mask = infs[col] != np.inf
+        # setting inf to max (False values (inf) are converted to max in column (inf ignored by mask))
+        df_num.loc[~mask, col] = df_num.loc[mask, col].max()
+    print("inf replaced with col max value")
+    
+    # clear variables to reduce RAM usage
+    infsreplaced = None
+    noinf        = None
+    infs         = None
+    
+    # number of unique values in a column
+    n_uniq_values = np.array(df_num.apply(lambda x: len(x.unique())))
+    ## remove columns that have (2) unique values and below
+    uniq_thres = 2
+    df_num = df_num.loc[:, n_uniq_values > uniq_thres]
+
+    print('cols with {} unique values and below removed'.format(uniq_thres))
+    print('{} columns left\n'.format(df_num.shape[1]))
+    
+    # around col 1800-2100 , uniq values starts to be <2
+    # last file might not be generated in this case if whole numcol chunk falls after this range
+    if df_num.shape[1] == 0:
+        print('no column left, file will not be generated')
+        print('--- last file already exported as Filtered {}-{} --- \n\n\n\n\n'.format(nums_, fi))
+        continue
+    
+    times['2.2   - Replace inf, uniq'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### Step 2.3: calculate mean, remove columns with 0 mean, dealing with inf mean ####
+    start_time = time.time() # opt
+    
+    ## mean
+
+    # splitting into n minor column chunks
+    n = 10
+    split = np.array_split(np.array(df_num), n, axis = 1)
+
+    # first calculation of mean will result in overflow error (ignored here)
+    # caused by a few columns with numbers that are too large,
+    # which result in inf mean (doesn't matter if median within assumption)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # nanmean ignores NaN if present
+        mean = [m for colchunk in split for m in np.nanmean(colchunk, axis = 0)]
+    
+    print('column mean calculated\n')
+    times['2.3   - Mean'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### Step 2.4: remove columns with mean/median > mm_thres (300), or columns where median==0 but mean > mean_if_md0_thres (300) ####
+    start_time = time.time() # opt
+
+    # mm stands for mean/median
+    mm_thres          = 300
+    mean_if_md0_thres = 300
+
+    mean     = np.array(mean)
+    median   = np.array(df_num.median())
+
+    # assume that all median < max_calc_mean/mm_thres(300), returns warning otherwise
+    nrows            = df_num.shape[0] # should be around 4,050,000 (27 files * 150,000 rows)
+    max_stor_val     = np.finfo(1.0).max
+    max_calc_mean    = max_stor_val/nrows
+    assump_med       = max_calc_mean/mm_thres
+    out_med_colname  = df_num.columns[median > assump_med]
+    
+    if  len(out_med_colname)>0:
+        print('****Warning: some median larger than assumed, outliers are {}****, check mean/median again for inf mean by scaling.'.format(out_med_colname))
+    else:
+        print('all median within assumption, safe to reject mean/median == np.inf')
+
+
+    # ignore errors caused by dividing by median = 0 (returns inf)
+    with np.errstate(divide='ignore', invalid = 'raise'):
+        mm = mean/median
+
+    ## mean/median < threshold - accept
+    ## mean =/= 0, median = 0  - accept only if mean < 300
+    print('{} columns left'.format(df_num.shape[1]))
+
+    df_num.loc['mean'] = mean
+    df_num = df_num.loc[:, np.array(mm<mm_thres) | (np.array(median==0) & np.array(mean<mean_if_md0_thres)) ]
+
+    mean = np.array(df_num.loc['mean'].values)
+    df_num.drop(index = 'mean', inplace = True)
+
+    print('cols with mean/median > {} removed; if median = 0, cols with mean > {} removed'.format(mm_thres, mean_if_md0_thres))
+    print('{} columns left\n'.format(df_num.shape[1]))
+    times['2.4   - Mean/median'].append(time.time() - start_time)
+    
+    
+    
+    
+    
+    #### Step 2.5: removing columns that don't satisfy std/mean condition ####
+    start_time = time.time() # opt
+
+    # calculate std
+    # splitting into n column chunks
+    n = 10
+    split = np.array_split(np.array(df_num), n, axis = 1)
+
+    std      = np.array([s for colchunk in split for s in np.nanstd(colchunk, axis = 0)])
+
+    ## std/mean condition: std/mean > 0.1 - accept
+    stdmean_thres = 0.1
+
+    stdmean  = std/mean
+
+    print('{} columns left'.format(df_num.shape[1]))
+
+    df_num = df_num.loc[:, abs(stdmean) > stdmean_thres]
+
+    print('cols with |std/mean| < {} removed'.format(stdmean_thres))
+    print('{} columns left\n'.format(df_num.shape[1]))
+    times['2.5   - Std/mean'].append(time.time() - start_time)
+    
+    
+    
+    
+    #### Step 2.6: file naming, exporting ####
+    start_time = time.time() # opt
+
+    ## file naming
+    # take numbers only from each file
+    nums = []
+    for tfile in tfiles:
+        fnums = [char for char in tfile if char.isdigit()]
+        nums.append(''.join(fnums))
+
+    if len(nums) < 5:
+        nums_ = '_'.join(nums)
+    else: # 5 files or above
+        nums_ = '_'.join(nums[:2] +['...'] + nums[-2:])
+    
+    # file index (1 to n_cchunk)
+    if count == 1:
+        fi = str(count)+' (first)'
+        
+        ## concat only the FIRST numeric col chunk with smiles (and index)
+        # empty list to store each imported smile
+        df_smiles = []
+
+        for tfile in tfiles:
+
+            # number of rows to read at once
+            rchunk_s = 100
+            # setting row limit (nrows) prevents pandas to read the empty rows (after data) (happens to book-dataset1, doens't happen to book_dataset_0)
+            row_lim = pd.read_csv('{}.csv'.format(tfile), usecols = [0]).dropna().shape[0]
+
+            # read a file in row chunks (up to smiles column)
+            chunks  = pd.read_csv('{}.csv'.format(tfile), usecols = range(start_numcol), skiprows = 1, chunksize = rchunk_s, nrows = row_lim, names = descriptors[:start_numcol], keep_default_na = False)
+
+            # add the file to df_smiles
+            df_smiles.append(pd.concat(chunks))
+
+        df_smiles = pd.concat(df_smiles)
+        
+        # joining back the indices and smile columns
+        df_num = pd.concat([df_smiles, df_num], axis = 1)
+        print('rejoined with the indices and smile columns')
+        print('{} columns left'.format(df_num.shape[1]))
+        
+        # clear variables to reduce RAM usage
+        df_smiles = None
+        chunks    = None
+
+    elif count == n_cchunk:
+        fi = str(count)+' (last)'
+    else: # count == 2, 3, ... n_cchunk-1
+        fi = str(count)
+     
+    # export
+    df_num.to_csv('Filtered {}-{}.csv'.format(nums_, fi), index=False)
+    # display(df_num)
+    
+    # clear variable to reduce RAM usage
+    df_num = None
+
+    print('--- File exported as Filtered {}-{} ----\n'.format(nums_, fi)) # opt
+    print('Numcol chunk {} completed. \n\n\n\n\n'.format(fi))
+    times['2.6   - Naming, exporting'].append(time.time() - start_time)
+    times['2.1-6 - Colchunk time'].append(time.time() - chunk_start)
+    
+times['Overall'].append(time.time() - overall_start)
+print("--- {:.4f} seconds ---(overall)".format(time.time() - overall_start))  #opt
+
+
+
+
+
+## timing
+d = list(  zip( times.keys(), [np.mean(np.array(times[key])) for key in times], times.values() )  )
+time_df, time_fname = pd.DataFrame(data=d, columns = ['Step', 'Avg Time', 'Times']), 'Step 2 Times {} ({} chunks)'.format(nums_, n_cchunk)
+time_df.to_csv('{}.csv'.format(time_fname))
+print('--- Times exported as {} ---'.format(time_fname)) # opt
+
+
+
+'''
+Number of numeric columns                         : 2956 columns
+Number of columns from all files processed at once: 300 columns
+Number of column chunks that can be generated     : 10 chunks
+Initialisation complete
+
+Selected numeric column chunks to be processed    : numcol chunk 4 to numcol chunk 5 (2 out of 10 numcol chunks)
+Number of files that will be generated            : 2 files
+read through all files
+
+numcol chunk 4 created
+403741 rows
+300 columns left
+
+inf replaced with col max value
+cols with 2 unique values and below removed
+163 columns left
+
+column mean calculated
+
+all median within assumption, safe to reject mean/median == np.inf
+163 columns left
+cols with mean/median > 300 removed; if median = 0, cols with mean > 300 removed
+155 columns left
+
+155 columns left
+cols with |std/mean| < 0.1 removed
+155 columns left
+
+--- File exported as Filtered 17_18_19_27-4 ----
+
+Numcol chunk 4 completed. 
+
+
+
+
+
+read through all files
+
+numcol chunk 5 created
+403741 rows
+300 columns left
+
+inf replaced with col max value
+cols with 2 unique values and below removed
+218 columns left
+
+column mean calculated
+
+all median within assumption, safe to reject mean/median == np.inf
+218 columns left
+cols with mean/median > 300 removed; if median = 0, cols with mean > 300 removed
+205 columns left
+
+205 columns left
+cols with |std/mean| < 0.1 removed
+186 columns left
+
+--- File exported as Filtered 17_18_19_27-5 ----
+
+Numcol chunk 5 completed. 
+
+
+
+
+
+--- 999.6358 seconds ---(overall)
+--- Times exported as Step 2 Times 17_18_19_27 (10 chunks) ---
+'''
